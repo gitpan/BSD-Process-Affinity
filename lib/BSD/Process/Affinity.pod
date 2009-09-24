@@ -1,0 +1,223 @@
+=head1 NAME
+
+BSD::Process::Affinity - Manipulate CPU affinities on FreeBSD
+
+=head1 SYNOPSIS
+
+	use BSD::Process::Affinity qw(:all);
+	cpuset_get_process_mask()->from_bitmask(0x5)->update();
+
+=head1 DESCRIPTION
+
+Ability to manage CPU affinities from userland was a long-awaited feature
+in FreeBSD, and it'finally s available since 7.1 release. But there's a lack of both
+documentation and affinity manipulation utilities. In C<SEE ALSO> section you'll find
+links to man pages.
+
+First, you should answer to yourself - do you really need such low-level management? Most of the
+time, answer would be 'no'. Your task must be either really cpu-intensive (not io-bound or network-bound),
+or you're system administrator and want to restrict users/servies/whatever to be running only on part of
+all available CPUs.
+
+FreeBSD gives you three levels of restricting CPUs for a single process/thread:
+
+=over 2
+
+=item *
+
+'Root' sets - they are set either for a whole system (and containing all processors), or for a jail. 
+You can get root set to see at which processors can your process theoretically run.
+
+=item *
+
+Effetive process set - each process is a member of some set (otherwise, it wouldnt't e able run at all, heh).
+Many processes can be members of a single set, so altering such set - you alter many processes.
+These sets are only for processes, not for threads - threads can only manipulate with anonymous masks, and 
+has effective set of parent process.
+
+=item *
+
+Per-process and per-thread anonymous masks. Each process can get/set it's own (or not own at all) mask,
+restricting available processors. Manipulating these masks is recommended way in manpages for
+application developers, when you want to set affinity just for a single process.
+
+=back
+
+Beware, when manipulating affinities, you may degrade performance instead of gaining it.
+
+=head1 INTERFACE
+
+This modules supports functional and object-oriented way to deliver you an Affinity object.
+You can import any function with B<cpuset_> prefix into your namespace, or call same function as
+package method without prefix - result would be the same, an Affinity object.
+
+So, the following is the same:
+
+	use BSD::Process::Affinity qw(cpuset_get_process_mask);
+	cpuset_get_process_mask()->from_bitmask(0x5)->update();
+		...and...
+	BSD::Process::Affinity->get_process_mask()->from_bitmask(0x5)->update();
+
+Whenever any error occurs, this module croaks.
+
+=head1 Get Affinity object
+
+All these methods (except for C<clone>) expects one parameter - an id of object you want to fetch affinity of. You can
+ommit it - this means 'give data for the current process/thread/whatever'.
+
+=head2 C<cpuset_clone>
+
+=head2 C<clone>
+
+Clones current process'es effective set, and makes current process member of just created set.
+
+=head2 C<cpuset_rootof_set>
+
+=head2 C<rootof_set>
+
+Gets 'root' set for a given set id.
+
+=head2 C<cpuset_rootof_pid>
+
+=head2 C<rootof_pid>
+
+Gets 'root' set for a given process id.
+
+=head2 C<cpuset_current_set>
+
+=head2 C<current_set>
+
+Gets set content by given set id.
+
+=head2 C<cpuset_current_pid>
+
+=head2 C<current_pid>
+
+Gets effetive set for a given process id.
+
+=head2 C<cpuset_get_thread_mask>
+
+=head2 C<get_thread_mask>
+
+Get anonymous mask for a given thread id (not perl's thread id, but a system thread id).
+
+=head2 C<cpuset_get_process_mask>
+
+=head2 C<get_process_mask>
+
+Get anonymous mask for a given process id.
+
+=head1 Processors' mask manipulation
+
+These methods can be called only on an already fetched Affinity object.
+
+The following methods are chainable: C<clear>, C<set_bit>, C<clear_bit>, C<from_bitmask>, C<intersect>.
+
+=head2 C<update>
+
+	$affinity->update();
+
+Writes back to kernel changes made in set content. Without this call, your changes does not 
+affect anything.
+
+=head2 C<assign>
+
+	$affinity->assign($pid);
+
+Sets set specifiyed in $affinity object as effective set for process $pid. 
+
+It is an error to apply this method for anonymous masks.
+
+=head2 C<clear>
+
+	$affinity->clear();
+
+Removes all processors from set.
+
+=head2 C<get_bit>
+
+	$affinity->get_bit($n);
+
+Returns true, if set contains processor number $n (starting from one), and false otherwise.
+
+=head2 C<set_bit>
+
+	$affinity->set_bit($n);
+
+Adds processor number $n (starting from one) to set.
+
+=head2 C<clear_bit>
+
+	$affinity->clear_bit($n);
+
+Removes processor number $n (starting from one) from set.
+
+=head2 C<to_bitmask>
+
+	my $mask = $affinity->to_bitmask();
+
+Tries to convert data in set structure to a number representing set processors mask. For
+example, if set contains 1st, 3rd and 4th processors, you get 1101b = 0xD = 13.
+
+If you have more processors in set, that can be represented by number of UV type (unsinged number, at 
+least 32 bits long = 32 processors), this method croaks. In this case, you should 
+operate with set using single bit manipulation functions.
+
+=head2 C<from_bitmask>
+
+	$n = 0x18;	#run on 4th and 5th processors only
+	$affinity->from_bitmask($n);
+
+Mirror method for C<to_bitmask> - converts bitmask back into internal data structure. $n is 
+treated as unsigned number.
+
+=head2 C<get_cpusetid>
+
+	$n = $affinity->get_cpusetid();
+
+Returns cpu set internal id - for usage with cpuset_rootof_set/cpuset_current_set. Returns
+zero for anonymous masks.
+
+=head2 C<intersect>
+
+	$affinity->intersect($rootset);
+
+Sets $affinity's cpu mask to intersection (bitwise and) of $affinity's and $rootset's masks.
+
+=head1 C<SEE ALSO>
+
+L<http://www.freebsd.org/cgi/man.cgi?query=cpuset_getaffinity>
+
+L<http://www.freebsd.org/cgi/man.cgi?query=cpuset>
+
+=head1 AUTHOR
+
+Sergey Aleynikov <sergey.aleynikov@gmail.com>
+
+=head1 LICENSE
+
+Copyright (c) 2009 by Sergey Aleynikov.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.
+
+=cut
