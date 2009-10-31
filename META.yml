@@ -16,8 +16,9 @@ no_index:
     - t
 requires:
   XSLoader: 0
+  Bit::Vector: 7.0
   Exporter: 0
   perl: 5.6.0
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.01
+version: 0.02

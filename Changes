@@ -1,5 +1,9 @@
 Revision history for BSD::Process::Affinity.
 
+0.02	2009-10-31
+		- use Bit::Vector for affinity content manipulation
+		- provide setaffinity script
+
 0.01	2009-09-24
 		- initial release
 

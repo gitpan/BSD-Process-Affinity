@@ -5,17 +5,17 @@ BSD::Process::Affinity - Manipulate CPU affinities on FreeBSD
 =head1 SYNOPSIS
 
 	use BSD::Process::Affinity qw(:all);
-	cpuset_get_process_mask()->from_bitmask(0x5)->update();
+	cpuset_get_process_mask()->from_num(0x5)->update();
 
 =head1 DESCRIPTION
 
 Ability to manage CPU affinities from userland was a long-awaited feature
-in FreeBSD, and it'finally s available since 7.1 release. But there's a lack of both
+in FreeBSD, and it is finally available since 7.1 release. But there's a lack of both
 documentation and affinity manipulation utilities. In C<SEE ALSO> section you'll find
 links to man pages.
 
 First, you should answer to yourself - do you really need such low-level management? Most of the
-time, answer would be 'no'. Your task must be either really cpu-intensive (not io-bound or network-bound),
+time, answer would be 'no'. Your task must be either really cpu-bounds (not io-bound or network-bound),
 or you're system administrator and want to restrict users/servies/whatever to be running only on part of
 all available CPUs.
 
@@ -30,7 +30,7 @@ You can get root set to see at which processors can your process theoretically r
 
 =item *
 
-Effetive process set - each process is a member of some set (otherwise, it wouldnt't e able run at all, heh).
+Effetive process set - each process is a member of some set (otherwise, it wouldnt't be able run at all, heh).
 Many processes can be members of a single set, so altering such set - you alter many processes.
 These sets are only for processes, not for threads - threads can only manipulate with anonymous masks, and 
 has effective set of parent process.
@@ -47,23 +47,24 @@ Beware, when manipulating affinities, you may degrade performance instead of gai
 
 =head1 INTERFACE
 
-This modules supports functional and object-oriented way to deliver you an Affinity object.
+This modules supports functional and object-oriented way to deliver you an Affinity object. 
 You can import any function with B<cpuset_> prefix into your namespace, or call same function as
-package method without prefix - result would be the same, an Affinity object.
+package method without prefix - result would be the same, an Affinity object. Import can
+be done using individual names, or all at one once using :all tag. 
 
 So, the following is the same:
 
 	use BSD::Process::Affinity qw(cpuset_get_process_mask);
-	cpuset_get_process_mask()->from_bitmask(0x5)->update();
+	cpuset_get_process_mask()->from_num(0x5)->update();
 		...and...
-	BSD::Process::Affinity->get_process_mask()->from_bitmask(0x5)->update();
+	BSD::Process::Affinity->get_process_mask()->from_num(0x5)->update();
 
 Whenever any error occurs, this module croaks.
 
 =head1 Get Affinity object
 
-All these methods (except for C<clone>) expects one parameter - an id of object you want to fetch affinity of. You can
-ommit it - this means 'give data for the current process/thread/whatever'.
+All these methods (except for C<clone>) expects one parameter - an id of object you want to
+fetch affinity of. You can ommit it - this means 'give data for the current process/thread/whatever'.
 
 =head2 C<cpuset_clone>
 
@@ -111,8 +112,6 @@ Get anonymous mask for a given process id.
 
 These methods can be called only on an already fetched Affinity object.
 
-The following methods are chainable: C<clear>, C<set_bit>, C<clear_bit>, C<from_bitmask>, C<intersect>.
-
 =head2 C<update>
 
 	$affinity->update();
@@ -128,49 +127,6 @@ Sets set specifiyed in $affinity object as effective set for process $pid.
 
 It is an error to apply this method for anonymous masks.
 
-=head2 C<clear>
-
-	$affinity->clear();
-
-Removes all processors from set.
-
-=head2 C<get_bit>
-
-	$affinity->get_bit($n);
-
-Returns true, if set contains processor number $n (starting from one), and false otherwise.
-
-=head2 C<set_bit>
-
-	$affinity->set_bit($n);
-
-Adds processor number $n (starting from one) to set.
-
-=head2 C<clear_bit>
-
-	$affinity->clear_bit($n);
-
-Removes processor number $n (starting from one) from set.
-
-=head2 C<to_bitmask>
-
-	my $mask = $affinity->to_bitmask();
-
-Tries to convert data in set structure to a number representing set processors mask. For
-example, if set contains 1st, 3rd and 4th processors, you get 1101b = 0xD = 13.
-
-If you have more processors in set, that can be represented by number of UV type (unsinged number, at 
-least 32 bits long = 32 processors), this method croaks. In this case, you should 
-operate with set using single bit manipulation functions.
-
-=head2 C<from_bitmask>
-
-	$n = 0x18;	#run on 4th and 5th processors only
-	$affinity->from_bitmask($n);
-
-Mirror method for C<to_bitmask> - converts bitmask back into internal data structure. $n is 
-treated as unsigned number.
-
 =head2 C<get_cpusetid>
 
 	$n = $affinity->get_cpusetid();
@@ -178,11 +134,35 @@ treated as unsigned number.
 Returns cpu set internal id - for usage with cpuset_rootof_set/cpuset_current_set. Returns
 zero for anonymous masks.
 
-=head2 C<intersect>
+=head2 C<to_bits>
 
-	$affinity->intersect($rootset);
+	my $vector = $affinity->to_bits();
 
-Sets $affinity's cpu mask to intersection (bitwise and) of $affinity's and $rootset's masks.
+Returns C<Bit::Vector> object, representing internal state. Then you can perform any
+actions with that object, and set it back using C<from_bits> method. Lowest (rightmost) bit represents 
+CPU0, and so on.
+
+=head2 C<from_bits>
+
+	$affinity->from_bits($vector);
+
+Loads mask represented by $vector into object. Note that you have to call C<update> to save 
+changes to kernel, that is not done automatically. Also, see C<to_bits> for vector format.
+
+This method is chainable with C<update>.
+
+=head2 C<from_num>
+
+	my $mask = 0x5;
+	$affinity->from_num($mask);
+
+Loads mask represented by $mask into object. Note that you have to call C<update> to save 
+changes to kernel, that is not done automatically. 
+
+Mask is treated as unsigned number, so number of processor it can represent depends on 
+your OS type - 32 or 64 bits.
+
+This method is chainable with C<update>.
 
 =head1 C<SEE ALSO>
 
@@ -202,8 +182,10 @@ All rights reserved.
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
 are met:
+
 1. Redistributions of source code must retain the above copyright
    notice, this list of conditions and the following disclaimer.
+
 2. Redistributions in binary form must reproduce the above copyright
    notice, this list of conditions and the following disclaimer in the
    documentation and/or other materials provided with the distribution.

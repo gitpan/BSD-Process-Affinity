@@ -245,102 +245,95 @@ get_cpusetid(obj)
 	OUTPUT:
 		RETVAL
 
-void
-clear(obj)
-		SV* obj
-	PPCODE:
-		struct cpusetinfo* info = (struct cpusetinfo*)SvIV(SvRV(obj));
-		CPU_ZERO(&(info->mask));
-		XSRETURN(1);
-
-int
-get_bit(obj, pos)
-		SV* obj
-		int pos
-	CODE:
-		struct cpusetinfo* info = (struct cpusetinfo*)SvIV(SvRV(obj));
-		if(pos < 1 || pos > CPU_SETSIZE){
-			croak("Processor number should be between 1 and %d", CPU_SETSIZE);
-		}
-		RETVAL = CPU_ISSET(pos - 1, &(info->mask));
-	OUTPUT:
-		RETVAL
-
-void
-set_bit(obj, pos)
-		SV* obj
-		int pos
-	PPCODE:
-		struct cpusetinfo* info = (struct cpusetinfo*)SvIV(SvRV(obj));
-		if(pos < 1 || pos > CPU_SETSIZE){
-			croak("Processor number should be between 1 and %d", CPU_SETSIZE);
-		}
-		CPU_SET(pos - 1, &(info->mask));
-		XSRETURN(1);
-
-void
-clear_bit(obj, pos)
-		SV* obj
-		int pos
-	PPCODE:
-		struct cpusetinfo* info = (struct cpusetinfo*)SvIV(SvRV(obj));
-		if(pos < 1 || pos > CPU_SETSIZE){
-			croak("Processor number should be between 1 and %d", CPU_SETSIZE);
-		}
-		CPU_CLR(pos - 1, &(info->mask));
-		XSRETURN(1);
-
-void
-intersect(obj1, obj2)
-		SV* obj1
-		SV* obj2
-	PPCODE:
-		struct cpusetinfo* info1 = (struct cpusetinfo*)SvIV(SvRV(obj1));
-		struct cpusetinfo* info2 = (struct cpusetinfo*)SvIV(SvRV(obj2));
-
-		CPU_AND(&(info1->mask), &(info2->mask));
-		XSRETURN(1);
-
-
 SV*
-to_bitmask(obj)
+to_bits(obj)
 		SV* obj
 	CODE:
+		dSP;
 		struct cpusetinfo* info = (struct cpusetinfo*)SvIV(SvRV(obj));
 
-		UV result = 0;
-		int max_valid_bit = sizeof(UV);
-		int i,j;
-		for(i = 0; i < CPU_SETSIZE; i++){
-			j = CPU_ISSET(i, &(info->mask));
-			if (j){
-				if (i > max_valid_bit){
-					croak("Can't convert mask to number - not enough precision");
-				}
-				result |= (UV)1 << i;
+		SV* bit_string = newSVpv("", 0);
+		int i;
+		for(i = CPU_SETSIZE - 1; i >= 0; i--){
+			if (CPU_ISSET(i, &(info->mask))){
+				sv_catpvn(bit_string, "1", 1);
+			}else{
+				sv_catpvn(bit_string, "0", 1);
 			}
 		}
 
-		RETVAL = newSVuv(result);
+		PUSHMARK(SP);
+		XPUSHs(sv_2mortal(newSVpv("Bit::Vector", 11)));
+		XPUSHs(sv_2mortal(newSViv(CPU_SETSIZE)));
+		XPUSHs(sv_2mortal(bit_string));
+		PUTBACK;
+		int iret = call_method("new_Bin", G_SCALAR);
+		SPAGAIN;
+
+		if (iret != 1){
+			croak("Bit::Vector didn't return an object");
+		}
+
+		SV* vector = POPs;
+		PUTBACK;
+
+		SvREFCNT_inc(vector);
+		RETVAL = vector;
+
 	OUTPUT:
 		RETVAL
 
 void
-from_bitmask(obj, num)
+from_bits(obj, vector)
+		SV* obj
+		SV* vector
+	PPCODE:
+		dSP;
+		struct cpusetinfo* info = (struct cpusetinfo*)SvIV(SvRV(obj));
+
+		PUSHMARK(SP);
+		XPUSHs(vector);
+		PUTBACK;
+		int iret = call_method("to_Bin", G_SCALAR);
+		SPAGAIN;
+
+		if (iret != 1){
+			croak("Bit::Vector didn't return a value");
+		}
+
+		SV* bit_string = POPs;
+		PUTBACK;
+
+		int bit_count;
+		char * _bit_string = SvPV(bit_string, bit_count);
+		if(bit_count > CPU_SETSIZE){
+			croak("Got bitstring larger then CPU_SETSIZE");
+		}
+
+		int i;
+		CPU_ZERO(&(info->mask));
+		for(i = bit_count - 1; i >= 0; i--){
+			if (_bit_string[i] == '1'){
+				CPU_SET(bit_count - 1 - i, &(info->mask));
+			}
+		}
+		XSRETURN(1);
+
+void
+from_num(obj, num)
 		SV* obj
 		SV* num
 	PPCODE:
 		struct cpusetinfo* info = (struct cpusetinfo*)SvIV(SvRV(obj));
 
+		CPU_ZERO(&(info->mask));
+
 		UV input = SvUV(num);
-		if (input == 0){
-			CPU_ZERO(&(info->mask));
-		}else{
+		if (input > 0){
 			int i;
-			CPU_ZERO(&(info->mask));
 			for(i = 0; i < sizeof(UV) * 8; i++){
 				if (i > CPU_SETSIZE){
-					croak("Can't convert number to mask - not enough precision");
+					croak("Can't convert number to mask - too much bits set, expecting at most %d", CPU_SETSIZE);
 				}
 				if (input & ((UV)1 << i)){
 					CPU_SET(i, &(info->mask));

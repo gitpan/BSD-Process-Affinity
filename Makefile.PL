@@ -7,14 +7,17 @@ name 'BSD-Process-Affinity';
 perl_version '5.006';
 
 abstract_from 'lib/BSD/Process/Affinity.pod';
-author 'Sergey Aleynikov <sergey.aleynikov@gmail.com>';
 version_from 'lib/BSD/Process/Affinity.pm';
+author 'Sergey Aleynikov <sergey.aleynikov@gmail.com>';
 license 'bsd';
 
 test_requires 'Test::More';
 
 requires 'XSLoader';
 requires 'Exporter';
+requires 'Bit::Vector' => 7.0;
+
+install_script 'bin/setaffinity';
 
 system 'pod2text lib/BSD/Process/Affinity.pod > README';
 
