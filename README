@@ -3,7 +3,7 @@ NAME
 
 SYNOPSIS
             use BSD::Process::Affinity qw(:all);
-            cpuset_get_process_mask()->from_num(0x5)->update();
+            cpuset_get_process_mask()->from_num(0x2)->update();
 
 DESCRIPTION
     Ability to manage CPU affinities from userland was a long-awaited

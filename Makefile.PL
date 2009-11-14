@@ -18,6 +18,7 @@ requires 'Exporter';
 requires 'Bit::Vector' => 7.0;
 
 install_script 'bin/setaffinity';
+install_script 'bin/runaffinity';
 
 system 'pod2text lib/BSD/Process/Affinity.pod > README';
 

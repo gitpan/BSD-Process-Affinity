@@ -5,7 +5,7 @@ BSD::Process::Affinity - Manipulate CPU affinities on FreeBSD
 =head1 SYNOPSIS
 
 	use BSD::Process::Affinity qw(:all);
-	cpuset_get_process_mask()->from_num(0x5)->update();
+	cpuset_get_process_mask()->from_num(0x2)->update();
 
 =head1 DESCRIPTION
 

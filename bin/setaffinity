@@ -4,7 +4,7 @@ use Bit::Vector;
 use BSD::Process::Affinity qw(:all);
 
 if(scalar @ARGV < 2){
-	print "Usage: \@pids afiinity_mask\n";
+	print "Usage: \@pids affinity_mask\n";
 	exit;
 }
 
@@ -22,7 +22,7 @@ foreach my $pid (@ARGV){
 	}
 }
 
-print "Successfull\n" if !$err;
+print " done\n" if !$err;
 
 __END__
 
@@ -38,7 +38,7 @@ Typical usage:
 
 Options synopsis:
 
- $ setaffinity @pids afiinity_mask
+ $ setaffinity @pids affinity_mask
 
 =head1 DESCRIPTION
 
@@ -56,6 +56,7 @@ Note that you can change affinity only of processes you own, only root can chang
 =head1 SEE ALSO
 
 man 2 cpuset_getaffinity
+
 man 2 cpuset
 
 =head1 AUTHOR
