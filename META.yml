@@ -2,8 +2,6 @@
 abstract: 'Manipulate CPU affinities on FreeBSD'
 author:
   - 'Sergey Aleynikov <sergey.aleynikov@gmail.com>'
-configure_requires:
-  ExtUtils::MakeMaker: 6.42
 distribution_type: module
 license: bsd
 meta-spec:
@@ -16,9 +14,8 @@ no_index:
     - t
 requires:
   XSLoader: 0
-  Bit::Vector: 7.0
   Exporter: 0
   perl: 5.6.0
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.0301
+version: 0.04

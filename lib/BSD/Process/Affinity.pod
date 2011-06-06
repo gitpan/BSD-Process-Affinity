@@ -4,20 +4,34 @@ BSD::Process::Affinity - Manipulate CPU affinities on FreeBSD
 
 =head1 SYNOPSIS
 
-	use BSD::Process::Affinity qw(:all);
-	cpuset_get_process_mask()->from_num(0x2)->update();
+	use BSD::Process::Affinity;
+	BSD::Process::Affinity->get_process_mask()->set(0x2)->update();
+
+=head1 VERSION INCOMPABILITY
+
+Version 0.4 has API partly incompatible with previous releases. Here are differences:
+
+=over 2
+
+=item *
+
+Functional interface is removed, only OO is available now
+
+=item *
+
+Lighten API - no more Bit::Vector object manipulations
+
+=item *
+
+C<from_num> method is renamed to C<set>, but for one more release is available under it's old name.
+
+=back
 
 =head1 DESCRIPTION
 
 Ability to manage CPU affinities from userland was a long-awaited feature
-in FreeBSD, and it is finally available since 7.1 release. But there's a lack of both
-documentation and affinity manipulation utilities. In C<SEE ALSO> section you'll find
-links to man pages.
-
-First, you should answer to yourself - do you really need such low-level management? Most of the
-time, answer would be 'no'. Your task must be either really cpu-bounds (not io-bound or network-bound),
-or you're system administrator and want to restrict users/servies/whatever to be running only on part of
-all available CPUs.
+in FreeBSD, and it is finally available since 7.1 release. This module allows 
+you to programmatically manipulate them from perl level.
 
 FreeBSD gives you three levels of restricting CPUs for a single process/thread:
 
@@ -47,62 +61,62 @@ Beware, when manipulating affinities, you may degrade performance instead of gai
 
 =head1 INTERFACE
 
-This modules supports functional and object-oriented way to deliver you an Affinity object. 
-You can import any function with B<cpuset_> prefix into your namespace, or call same function as
-package method without prefix - result would be the same, an Affinity object. Import can
-be done using individual names, or all at one once using :all tag. 
+To operate with this module, you should do three steps:
 
-So, the following is the same:
+=over 2
 
-	use BSD::Process::Affinity qw(cpuset_get_process_mask);
-	cpuset_get_process_mask()->from_num(0x5)->update();
-		...and...
-	BSD::Process::Affinity->get_process_mask()->from_num(0x5)->update();
+=item *
+
+Fetch an Affinity object for interesting kernel object (either old or new one)
+
+=item *
+
+Update it's internal state (or just fetch it)
+
+=item *
+
+If required, write changes back to the kernel using C<update> method.
+
+=back
+
+Here is an example that makes current thread NOT to run on 2nd processor in system:
+
+	use BSD::Process::Affinity;
+	my $obj = BSD::Process::Affinity->get_thread_mask();
+	$obj->set($obj->get() & ~0x2)->update();
+
+Note the chainable ability of C<update>.
 
 Whenever any error occurs, this module croaks.
 
 =head1 Get Affinity object
 
 All these methods (except for C<clone>) expects one parameter - an id of object you want to
-fetch affinity of. You can ommit it - this means 'give data for the current process/thread/whatever'.
-
-=head2 C<cpuset_clone>
+fetch affinity of. You can just ommit it - this means 'give data for the current process/thread/whatever'.
 
 =head2 C<clone>
 
 Clones current process'es effective set, and makes current process member of just created set.
 
-=head2 C<cpuset_rootof_set>
-
 =head2 C<rootof_set>
 
 Gets 'root' set for a given set id.
-
-=head2 C<cpuset_rootof_pid>
 
 =head2 C<rootof_pid>
 
 Gets 'root' set for a given process id.
 
-=head2 C<cpuset_current_set>
-
 =head2 C<current_set>
 
 Gets set content by given set id.
-
-=head2 C<cpuset_current_pid>
 
 =head2 C<current_pid>
 
 Gets effetive set for a given process id.
 
-=head2 C<cpuset_get_thread_mask>
-
 =head2 C<get_thread_mask>
 
 Get anonymous mask for a given thread id (not perl's thread id, but a system thread id).
-
-=head2 C<cpuset_get_process_mask>
 
 =head2 C<get_process_mask>
 
@@ -110,7 +124,7 @@ Get anonymous mask for a given process id.
 
 =head1 Processors' mask manipulation
 
-These methods can be called only on an already fetched Affinity object.
+Here are existing Affinity object methods.
 
 =head2 C<update>
 
@@ -123,44 +137,34 @@ affect anything.
 
 	$affinity->assign($pid);
 
-Sets set specifiyed in $affinity object as effective set for process $pid. 
+Assigns set specifiyed in $affinity object to be an effective set for process $pid. 
 
-It is an error to apply this method for anonymous masks.
+It is an error to apply this method to anonymous masks.
 
 =head2 C<get_cpusetid>
 
-	$n = $affinity->get_cpusetid();
+	my $n = $affinity->get_cpusetid();
 
-Returns cpu set internal id - for usage with cpuset_rootof_set/cpuset_current_set. Returns
+Returns cpu set internal id - for usage with rootof_set/current_set. Returns
 zero for anonymous masks.
 
-=head2 C<to_bits>
+=head2 C<get>
 
-	my $vector = $affinity->to_bits();
+	my $value = $affinity->get();
 
-Returns C<Bit::Vector> object, representing internal state. Then you can perform any
-actions with that object, and set it back using C<from_bits> method. Lowest (rightmost) bit represents 
+Returns usigned integer representing current mask. Then you can perform any
+actions with it, and set it back using C<set> method. Lowest (rightmost) bit represents 
 CPU0, and so on.
 
-=head2 C<from_bits>
+=head2 C<set>
 
-	$affinity->from_bits($vector);
-
-Loads mask represented by $vector into object. Note that you have to call C<update> to save 
-changes to kernel, that is not done automatically. Also, see C<to_bits> for vector format.
-
-This method is chainable with C<update>.
-
-=head2 C<from_num>
-
-	my $mask = 0x5;
-	$affinity->from_num($mask);
+	$affinity->set(0x5);  #run on CPU0 and CPU2
 
 Loads mask represented by $mask into object. Note that you have to call C<update> to save 
 changes to kernel, that is not done automatically. 
 
-Mask is treated as unsigned number, so number of processor it can represent depends on 
-your OS type - 32 or 64 bits.
+Mask is treated as an unsigned integer, so number of processor it can represent depends on 
+OS arccitecture - 32 or 64 bits.
 
 This method is chainable with C<update>.
 
@@ -176,7 +180,7 @@ Sergey Aleynikov <sergey.aleynikov@gmail.com>
 
 =head1 LICENSE
 
-Copyright (c) 2009 by Sergey Aleynikov.
+Copyright (c) 2009, 2011 by Sergey Aleynikov.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without

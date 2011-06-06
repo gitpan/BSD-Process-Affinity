@@ -1,7 +1,6 @@
 #!/usr/bin/perl
 use strict;
-use Bit::Vector;
-use BSD::Process::Affinity qw(:all);
+use BSD::Process::Affinity;
 
 if(scalar @ARGV < 2){
 	print "Usage: \@pids affinity_mask\n";
@@ -9,12 +8,11 @@ if(scalar @ARGV < 2){
 }
 
 my $affinity = pop @ARGV;
-my $vector = Bit::Vector->new_Bin(length($affinity), $affinity);
 my $err = 0;
 
 foreach my $pid (@ARGV){
 	eval {
-		cpuset_get_process_mask($pid)->from_bits($vector)->update(); 1
+		BSD::Process::Affinity->get_process_mask($pid)->set($affinity)->update(); 1
 	} or do {
 		$err = 1;
 		$@ =~ s/\s+at \/.*line.*//;

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2009 by Sergey Aleynikov.
+Copyright (c) 2009, 2011 by Sergey Aleynikov.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -74,7 +74,6 @@ populate_set(struct cpusetinfo *info){
 }
 
 MODULE = BSD::Process::Affinity		PACKAGE = BSD::Process::Affinity
-
 PROTOTYPES: DISABLE
 
 void
@@ -85,17 +84,15 @@ DESTROY(obj)
 		Safefree(info);
 
 SV *
-cpuset_clone(...)
-	ALIAS:
-		clone = 1
+clone(...)
 	CODE:
-		objnew("BSD::Process::Affinity");
+		objnew("BSD::Process::Affinity::Cpuset");
 
 		if (cpuset(&(info->setid)) != 0){
 			Safefree(info);
 			PANIC("Can't clone cpuset");
 		}
-		/* we're only members of new set */
+		/* we're the only members of new set */
 		info->level = CPU_LEVEL_CPUSET;
 		info->which = CPU_WHICH_PID;
 		info->id = -1;
@@ -107,49 +104,36 @@ cpuset_clone(...)
 		RETVAL
 
 SV *
-cpuset_rootof_set(...)
+rootof_set(...)
 	ALIAS:
-		rootof_set = 1
-		cpuset_rootof_pid = 2
-		rootof_pid = 3
-		cpuset_current_set = 4
-		current_set = 5
-		cpuset_current_pid = 6
-		current_pid = 7
+		rootof_pid = 1
+		current_set = 2
+		current_pid = 3
 	CODE:
-		objnew("BSD::Process::Affinity");
+		objnew("BSD::Process::Affinity::Cpuset");
 
-		if (ix % 2){
-			if(items > 1){
-				info->id = SvIV(ST(1));
-			}
-		}else{
-			if (items > 0){
-				info->id = SvIV(ST(0));
-			}
+		if (items > 0){
+			info->id = SvIV(ST(0));
 		}
+
 		if (info->id == 0){
 			info->id = -1;
 		}
 
 		switch(ix){
 			case 0:
-			case 1:
 				info->level = CPU_LEVEL_ROOT;
 				info->which = CPU_WHICH_CPUSET;
 				break;
-			case 2:
-			case 3:
+			case 1:
 				info->level = CPU_LEVEL_ROOT;
 				info->which = CPU_WHICH_PID;
 				break;
-			case 4:
-			case 5:
+			case 2:
 				info->level = CPU_LEVEL_CPUSET;
 				info->which = CPU_WHICH_CPUSET;
 				break;
-			case 6:
-			case 7:
+			case 3:
 				info->level = CPU_LEVEL_CPUSET;
 				info->which = CPU_WHICH_PID;
 				break;
@@ -167,26 +151,19 @@ cpuset_rootof_set(...)
 		RETVAL
 
 SV *
-cpuset_get_thread_mask(...)
+get_thread_mask(...)
 	ALIAS:
-		get_thread_mask = 1
-		cpuset_get_process_mask = 2
-		get_process_mask = 3
+		get_process_mask = 1
 	CODE:
-		objnew("BSD::Process::Affinity");
+		objnew("BSD::Process::Affinity::Cpuset");
 
 		info->level = CPU_LEVEL_WHICH;
-		info->which = (ix < 2) ? CPU_WHICH_TID : CPU_WHICH_PID;
+		info->which = (ix == 0) ? CPU_WHICH_TID : CPU_WHICH_PID;
 
-		if (ix % 2){
-			if(items > 1){
-				info->id = SvIV(ST(1));
-			}
-		}else{
-			if (items > 0){
-				info->id = SvIV(ST(0));
-			}
+		if (items > 0){
+			info->id = SvIV(ST(0));
 		}
+
 		if (info->id == 0){
 			info->id = -1;
 		}
@@ -196,6 +173,8 @@ cpuset_get_thread_mask(...)
 		RETVAL = obj_ref;
 	OUTPUT:
 		RETVAL
+
+MODULE = BSD::Process::Affinity     PACKAGE = BSD::Process::Affinity::Cpuset
 
 void
 assign(obj, ...)
@@ -246,83 +225,34 @@ get_cpusetid(obj)
 		RETVAL
 
 SV*
-to_bits(obj)
+get(obj)
 		SV* obj
 	CODE:
 		dSP;
 		struct cpusetinfo* info = (struct cpusetinfo*)SvIV(SvRV(obj));
+		UV result = 0;
 
-		SV* bit_string = newSVpv("", 0);
 		int i;
-		for(i = CPU_SETSIZE - 1; i >= 0; i--){
+		for(i = 0; i < CPU_SETSIZE; i++){
 			if (CPU_ISSET(i, &(info->mask))){
-				sv_catpvn(bit_string, "1", 1);
-			}else{
-				sv_catpvn(bit_string, "0", 1);
+                if (i > sizeof(UV) * 8){
+                    croak("Can't convert mask to number - too many bits set, got %d already set, but unsigned can hold only %d", i, sizeof(UV) * 8);
+                }
+
+				result |= ((UV)1 << i);
 			}
 		}
 
-		PUSHMARK(SP);
-		XPUSHs(sv_2mortal(newSVpv("Bit::Vector", 11)));
-		XPUSHs(sv_2mortal(newSViv(CPU_SETSIZE)));
-		XPUSHs(sv_2mortal(bit_string));
-		PUTBACK;
-		int iret = call_method("new_Bin", G_SCALAR);
-		SPAGAIN;
-
-		if (iret != 1){
-			croak("Bit::Vector didn't return an object");
-		}
-
-		SV* vector = POPs;
-		PUTBACK;
-
-		SvREFCNT_inc(vector);
-		RETVAL = vector;
-
+		RETVAL = newSVuv(result);
 	OUTPUT:
 		RETVAL
 
 void
-from_bits(obj, vector)
-		SV* obj
-		SV* vector
-	PPCODE:
-		dSP;
-		struct cpusetinfo* info = (struct cpusetinfo*)SvIV(SvRV(obj));
-
-		PUSHMARK(SP);
-		XPUSHs(vector);
-		PUTBACK;
-		int iret = call_method("to_Bin", G_SCALAR);
-		SPAGAIN;
-
-		if (iret != 1){
-			croak("Bit::Vector didn't return a value");
-		}
-
-		SV* bit_string = POPs;
-		PUTBACK;
-
-		int bit_count;
-		char * _bit_string = SvPV(bit_string, bit_count);
-		if(bit_count > CPU_SETSIZE){
-			croak("Got bitstring larger then CPU_SETSIZE");
-		}
-
-		int i;
-		CPU_ZERO(&(info->mask));
-		for(i = bit_count - 1; i >= 0; i--){
-			if (_bit_string[i] == '1'){
-				CPU_SET(bit_count - 1 - i, &(info->mask));
-			}
-		}
-		XSRETURN(1);
-
-void
-from_num(obj, num)
+set(obj, num)
 		SV* obj
 		SV* num
+    ALIAS:
+        from_num = 1
 	PPCODE:
 		struct cpusetinfo* info = (struct cpusetinfo*)SvIV(SvRV(obj));
 
@@ -332,10 +262,11 @@ from_num(obj, num)
 		if (input > 0){
 			int i;
 			for(i = 0; i < sizeof(UV) * 8; i++){
-				if (i > CPU_SETSIZE){
-					croak("Can't convert number to mask - too much bits set, expecting at most %d", CPU_SETSIZE);
-				}
-				if (input & ((UV)1 << i)){
+                if (input & ((UV)1 << i)){
+					if (i > CPU_SETSIZE){
+						croak("Can't convert number to mask - too many bits set, expecting at most %d set, but already got %d", CPU_SETSIZE, i);
+					}
+
 					CPU_SET(i, &(info->mask));
 				}
 			}
